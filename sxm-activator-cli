@@ -1,0 +1,163 @@
+#!/usr/bin/env php
+<?php
+
+// check for the curl extension
+	if( !function_exists('curl_version') )
+	{
+		echo 'We need the php CURL extension to proceed. Please install it and try again.'."\n";
+		exit;
+	}
+
+// get radio ID from argv
+	$radio_id = (array_key_exists(1, $argv) ? $argv[1] : '');
+
+// prompt for radio id if not provided
+	if( !$radio_id )
+	{
+		echo 'Enter Radio ID: ';
+		$input = fopen('php://stdin','r');
+		$radio_id = trim(fgets($input));
+		fclose($input);
+	}
+
+// still no radio id
+	if( !$radio_id )
+	{
+		echo 'We need a Radio ID to continue.'."\n";
+		echo 'Exiting...'."\n";
+		exit;
+	}
+
+// prompt to proceed
+	echo "\n";
+	echo 'Ensure your radio is on and waiting to receive the activation signal.'."\n";
+	echo 'Radio ID: ' . $radio_id . "\n";
+	echo 'Proceed? (y/n): ';
+	$input = fopen('php://stdin','r');
+	$proceed = strtolower(trim(fgets($input)));
+	fclose($input);
+	if( $proceed != 'y' && $proceed != 'yes' )
+	{
+		echo 'Exiting...'."\n";
+		exit;
+	}
+
+// some useful vars
+	$useragent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/19F77 [FBAN/FBIOS;FBDV/iPhone11,8;FBMD/iPhone;FBSN/iOS;FBSV/15.5;FBSS/2;FBID/phone;FBLC/en_US;FBOP/5]';
+
+
+//
+// step 1: get claim token
+//
+	echo 'Fetching Login Claim Token...'."\t";
+
+	// set up curl POST request
+	$ch1 =	curl_init();
+			curl_setopt($ch1, CURLOPT_URL, 'https://mcare.siriusxm.ca/authService/100000002/login');
+			curl_setopt($ch1, CURLOPT_POST, true);
+			curl_setopt($ch1, CURLOPT_RETURNTRANSFER, true);
+			curl_setopt($ch1, CURLOPT_HTTPHEADER,	[
+														'Accept: application/json',
+														'Content-Type: application/x-www-form-urlencoded',
+														'User-Agent: '.$useragent,
+														'X-Kony-App-Secret: e3048b73f2f7a6c069f7d8abf5864115',
+														'X-Kony-App-Key: 85ee60a3c8f011baaeba01ff3a5ae2c9',
+														'X-Kony-Platform-Type: ios'
+													]);
+
+	// get data and close connection
+	$dat1 =	curl_exec($ch1);
+			curl_close($ch1);
+
+	// decode JSON data to array
+	$dat1 = json_decode($dat1, true);
+
+// check result
+	if( is_array($dat1) && $dat1['claims_token']['value'] )
+	{
+		$claim_token = $dat1['claims_token']['value'];
+		echo 'Success!'."\n\n";
+	}
+	else
+	{
+		echo 'Failed!'."\n";
+		exit;
+	}
+
+
+//
+// step 2: create a trial account using the device ID
+//
+	echo 'Creating Trial Account...'."\t";
+
+	// set up curl POST request
+	$ch2 =	curl_init();
+			curl_setopt($ch2, CURLOPT_URL, 'https://mcare.siriusxm.ca/services/DealerAppService3/CreateAccount');
+			curl_setopt($ch2, CURLOPT_POST, true);
+			curl_setopt($ch2, CURLOPT_RETURNTRANSFER, true);
+			curl_setopt($ch2, CURLOPT_POSTFIELDS,	http_build_query(['deviceId' => $radio_id]));
+			curl_setopt($ch2, CURLOPT_HTTPHEADER,	[
+														'X-Kony-Authorization: ' . $claim_token,
+														'Content-Type: application/x-www-form-urlencoded',
+														'X-Kony-API-Version: 1.0',
+														'X-Kony-Platform-Type: ios',
+														'Accept: */*'
+													]);
+
+	// get data and close connection
+	$dat2 =	curl_exec($ch2);
+			curl_close($ch2);
+
+	// decode JSON data to array
+	$dat2 = json_decode($dat2, true);
+
+// check trial account response
+	if( is_array($dat2) && $dat2['httpStatusCode'] == 200 )
+	{
+		echo 'Success!'."\n\n";
+	}
+	else
+	{
+		echo 'Failed!'."\n";
+		exit;
+	}
+
+
+//
+// step 3: send activation signal
+//
+	echo 'Sending Activation Signal...'."\t";
+
+	// set up curl POST request
+	$ch3 =	curl_init();
+			curl_setopt($ch3, CURLOPT_URL, 'https://mcare.siriusxm.ca/services/USUpdateDeviceSATRefresh/updateDeviceSATRefreshWithPriority');
+			curl_setopt($ch3, CURLOPT_POST, true);
+			curl_setopt($ch3, CURLOPT_RETURNTRANSFER, true);
+			curl_setopt($ch3, CURLOPT_POSTFIELDS,	http_build_query(['deviceId' => $radio_id]));
+			curl_setopt($ch3, CURLOPT_HTTPHEADER,	[
+														'X-Kony-Authorization: ' . $claim_token,
+														'Content-Type: application/x-www-form-urlencoded',
+														'X-Kony-API-Version: 1.0',
+														'X-Kony-Platform-Type: ios',
+														'Accept: */*'
+													]);
+
+	// get data and close connection
+	$dat3 =	curl_exec($ch3);
+			curl_close($ch3);
+
+	// decode JSON data to array
+	$dat3 = json_decode($dat3, true);
+
+// check activation signal response
+	if( is_array($dat3) && $dat3['httpStatusCode'] == 200 && $dat3['seqValue'] )
+	{
+		echo 'Success!'."\n";
+		echo 'Please allow up to 5 minutes for your radio to update.'."\n";
+		echo 'Enjoy!'."\n";
+	}
+	else
+	{
+		echo 'Failed!'."\n";
+		exit;
+	}
