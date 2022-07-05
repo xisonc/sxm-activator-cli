@@ -16,7 +16,7 @@ Simply download the sxm-activator-cli script, and run it via your terminal:
 $ ./sxm-activator-cli MYRADIOID
 ```
 
-or
+or you will be prompted for your radio id if you don't provide one on execution:
 
 ```console
 $ ./sxm-activator-cli
